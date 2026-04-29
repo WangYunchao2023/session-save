@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Session Saver Script
+Session Saver Script v1.2.1
 Extracts session content from JSONL and saves as HTML + MD with formatting preserved.
 """
 import json
@@ -11,8 +11,11 @@ import os
 from datetime import datetime
 from pathlib import Path
 
+# ─────────────────────────────────────────────
+# Timestamp / HTML utilities
+# ─────────────────────────────────────────────
+
 def parse_timestamp(ts):
-    """Convert ISO timestamp to readable format"""
     try:
         dt = datetime.fromisoformat(ts.replace('Z', '+00:00'))
         return dt.strftime('%a %Y-%m-%d %H:%M GMT+8')
@@ -20,21 +23,15 @@ def parse_timestamp(ts):
         return ts
 
 def escape_html(text):
-    """Escape special HTML characters"""
     return (text
         .replace('&', '&amp;')
         .replace('<', '&lt;')
         .replace('>', '&gt;'))
 
 def convert_text_to_html(text):
-    """Convert markdown-like text to HTML with proper table/code rendering"""
     lines = text.split('\n')
-    result = []
-    in_pre = False
-    table_rows = []
-    
+    result, in_pre, table_rows = [], False, []
     for line in lines:
-        # Code blocks (must process before other formatting)
         if line.strip().startswith('```'):
             if not in_pre:
                 lang = line.strip()[3:]
@@ -44,81 +41,50 @@ def convert_text_to_html(text):
                 result.append('</code></pre>')
                 in_pre = False
             continue
-        
         if in_pre:
-            result.append(escape_html(line))
-            continue
-        
-        # Tables - collect rows
+            result.append(escape_html(line)); continue
         if '|' in line and line.strip().startswith('|'):
             parts = [p.strip() for p in line.split('|')[1:-1]]
-            # Skip separator rows like |---|---|
             if parts and all(re.match(r'^[-:]+$', p.replace(' ', '').replace(':', '')) for p in parts if p):
                 continue
-            if parts:
-                table_rows.append(parts)
-            continue
+            if parts: table_rows.append(parts); continue
         else:
-            # Flush accumulated table
             if table_rows:
-                result.append('<table>')
-                result.append('<thead><tr>')
-                for th in table_rows[0]:
-                    result.append(f'<th>{th}</th>')
-                result.append('</tr></thead>')
-                result.append('<tbody>')
+                result.append('<table><thead><tr>')
+                for th in table_rows[0]: result.append(f'<th>{th}</th>')
+                result.append('</tr></thead><tbody>')
                 for row in table_rows[1:]:
                     result.append('<tr>')
-                    for td in row:
-                        result.append(f'<td>{td}</td>')
+                    for td in row: result.append(f'<td>{td}</td>')
                     result.append('</tr>')
                 result.append('</tbody></table>')
                 table_rows = []
-        
-        # Headers
-        if line.startswith('####'):
-            result.append(f'<h4>{line[4:].strip()}</h4>')
-        elif line.startswith('###'):
-            result.append(f'<h3>{line[3:].strip()}</h3>')
-        elif line.startswith('##'):
-            result.append(f'<h2>{line[2:].strip()}</h2>')
-        elif line.startswith('#'):
-            result.append(f'<h1>{line[1:].strip()}</h1>')
-        elif line.strip() == '---':
-            result.append('<hr>')
-        elif line.startswith('>'):
-            content = line[1:].strip()
-            result.append(f'<blockquote>{content}</blockquote>')
-        elif line.startswith('- ') or line.startswith('* '):
-            result.append(f'<li>{line[2:].strip()}</li>')
+        if line.startswith('####'): result.append(f'<h4>{line[4:].strip()}</h4>')
+        elif line.startswith('###'): result.append(f'<h3>{line[3:].strip()}</h3>')
+        elif line.startswith('##'): result.append(f'<h2>{line[2:].strip()}</h2>')
+        elif line.startswith('#'): result.append(f'<h1>{line[1:].strip()}</h1>')
+        elif line.strip() == '---': result.append('<hr>')
+        elif line.startswith('>'): result.append(f'<blockquote>{line[1:].strip()}</blockquote>')
+        elif line.startswith('- ') or line.startswith('* '): result.append(f'<li>{line[2:].strip()}</li>')
         elif re.match(r'^\d+\.\s', line):
-            match = re.match(r'^(\d+)\.\s(.*)', line)
-            if match:
-                result.append(f'<li>{match.group(2)}</li>')
-        elif line.strip() == '':
-            result.append('<br>')
+            m = re.match(r'^(\d+)\.\s(.*)', line)
+            if m: result.append(f'<li>{m.group(2)}</li>')
+        elif line.strip() == '': result.append('<br>')
         else:
-            formatted = escape_html(line)
-            formatted = re.sub(r'\*\*(.*?)\*\*', r'<strong>\1</strong>', formatted)
-            formatted = re.sub(r'`(.*?)`', r'<code>\1</code>', formatted)
-            formatted = re.sub(r'\[(.*?)\]\((.*?)\)', r'<a href="\2">\1</a>', formatted)
-            result.append(f'<p>{formatted}</p>')
-    
-    # Flush remaining table
+            fmt = escape_html(line)
+            fmt = re.sub(r'\*\*(.*?)\*\*', r'<strong>\1</strong>', fmt)
+            fmt = re.sub(r'`(.*?)`', r'<code>\1</code>', fmt)
+            fmt = re.sub(r'\[(.*?)\]\((.*?)\)', r'<a href="\2">\1</a>', fmt)
+            result.append(f'<p>{fmt}</p>')
     if table_rows:
-        result.append('<table>')
-        result.append('<thead><tr>')
-        for th in table_rows[0]:
-            result.append(f'<th>{th}</th>')
-        result.append('</tr></thead>')
-        result.append('<tbody>')
+        result.append('<table><thead><tr>')
+        for th in table_rows[0]: result.append(f'<th>{th}</th>')
+        result.append('</tr></thead><tbody>')
         for row in table_rows[1:]:
             result.append('<tr>')
-            for td in row:
-                result.append(f'<td>{td}</td>')
+            for td in row: result.append(f'<td>{td}</td>')
             result.append('</tr>')
         result.append('</tbody></table>')
-    
     return '\n'.join(result)
 
 HTML_HEADER = '''<!DOCTYPE html>
@@ -193,72 +159,57 @@ HTML_FOOTER = '''
 </html>
 '''
 
+# ─────────────────────────────────────────────
+# Session file discovery (scans ALL agent dirs)
+# ─────────────────────────────────────────────
+
 def find_session_file(session_key):
-    """Find the JSONL file for a given session key across ALL agent directories.
-    
-    Searches ~/.openclaw/agents/*/sessions/ for the session, including:
-    - ~/.openclaw/agents/main/sessions/
-    - ~/.openclaw/agents/{workspace-agent}/sessions/
-    - ~/.openclaw/agents/*/sessions/
-    """
+    """Find JSONL across ~/.openclaw/agents/*/sessions/."""
     agents_base = Path.home() / '.openclaw' / 'agents'
     if not agents_base.exists():
         return None
-    
-    # Get all agent session directories
     agent_dirs = [d for d in agents_base.iterdir() if d.is_dir() and (d / 'sessions').is_dir()]
-    
-    # Extract search key parts
     key_part = session_key.split(':')[-1][:8] if ':' in session_key else session_key[:8]
-    
+
     for agent_dir in agent_dirs:
         sessions_dir = agent_dir / 'sessions'
         sessions_json = sessions_dir / 'sessions.json'
-        
-        # Strategy 1: Check sessions.json for key mapping
+
+        # Strategy 1: sessions.json
         if sessions_json.exists():
             try:
                 with open(sessions_json, 'r') as f:
                     data = json.load(f)
-                
-                # Normalize prefixes to try
-                prefixes_to_try = [session_key]
+                prefixes = [session_key]
                 if not session_key.startswith('agent:'):
-                    prefixes_to_try.append('agent:' + session_key)
+                    prefixes.append('agent:' + session_key)
                 if session_key.startswith('agent:'):
                     parts = session_key.split(':')
                     if len(parts) >= 3:
-                        prefixes_to_try.append(':'.join(parts[2:]))  # bare key
-                
-                for key_to_try in prefixes_to_try:
-                    if key_to_try in data:
-                        fp = data[key_to_try].get('sessionFile')
-                        if fp:
-                            p = Path(fp)
-                            if p.exists():
-                                return p
-                
-                # Search by sessionId match
+                        prefixes.append(':'.join(parts[2:]))
+                for k in prefixes:
+                    if k in data:
+                        fp = data[k].get('sessionFile')
+                        if fp and Path(fp).exists():
+                            return Path(fp)
                 for k, v in data.items():
                     if isinstance(v, dict):
                         sid = v.get('sessionId', '')
                         if key_part in sid or sid in session_key:
                             fp = v.get('sessionFile')
-                            if fp:
-                                p = Path(fp)
-                                if p.exists():
-                                    return p
+                            if fp and Path(fp).exists():
+                                return Path(fp)
             except Exception as e:
                 print(f"Error reading {sessions_json}: {e}", file=sys.stderr)
-        
-        # Strategy 2: Direct filename match (UUID partial match)
+
+        # Strategy 2: filename match
         for f in sessions_dir.glob('*.jsonl'):
-            if key_part in f.name and not any(x in f.name for x in ['.deleted','.reset','.checkpoint']):
+            if key_part in f.name and not any(x in f.name for x in ['.deleted', '.reset', '.checkpoint']):
                 return f
-        
-        # Strategy 3: Content search (first 5 lines of each file)
+
+        # Strategy 3: content search
         for f in sessions_dir.glob('*.jsonl'):
-            if any(x in f.name for x in ['.deleted','.reset','.checkpoint']):
+            if any(x in f.name for x in ['.deleted', '.reset', '.checkpoint']):
                 continue
             try:
                 with open(f, 'r', encoding='utf-8') as file:
@@ -269,13 +220,10 @@ def find_session_file(session_key):
                             return f
             except:
                 continue
-    
     return None
 
 def extract_messages(session_file, session_key):
-    """Extract messages from JSONL file"""
     messages = []
-    
     with open(session_file, 'r', encoding='utf-8') as f:
         for line in f:
             line = line.strip()
@@ -285,191 +233,190 @@ def extract_messages(session_file, session_key):
                 obj = json.loads(line)
                 if obj.get('type') == 'message' and obj.get('message', {}).get('role') in ('user', 'assistant'):
                     role = obj['message']['role']
-                    timestamp = obj.get('timestamp', '')
-                    time_str = parse_timestamp(timestamp)
-                    
+                    ts = obj.get('timestamp', '')
+                    tstr = parse_timestamp(ts)
                     text = ''
-                    for content in obj.get('message', {}).get('content', []):
-                        if content.get('type') == 'text':
-                            t = content.get('text', '')
-                            # Clean user messages
+                    for c in obj.get('message', {}).get('content', []):
+                        if c.get('type') == 'text':
+                            t = c.get('text', '')
                             if role == 'user':
                                 t = re.sub(r'Sender \(untrusted metadata\):.*?```json.*?```\n*', '', t, flags=re.DOTALL)
                                 t = re.sub(r'^\[.*?\]\s*', '', t.strip())
                             text += t
-                    
                     if text.strip():
-                        messages.append((role, time_str, text.strip()))
-            except Exception as e:
+                        messages.append((role, tstr, text.strip()))
+            except:
                 continue
-    
     return messages
 
 def detect_session_type_and_target(messages):
-    """Detect if session is about skill optimization and identify target skill"""
-    # Keywords for skill optimization
-    skill_opt_keywords = ['优化', 'skill优化', 'auto-optimize', 'skill-creator', '改进', '改善', '提升']
-    
-    # Known skill names to look for
-    known_skills = [
-        'session-save', 'session_save', 'session save',
-        'auto-optimize-skills', 'auto_optimize', 'auto optimize',
-        'feishu-bitable', 'feishu-calendar', 'feishu-im-read',
-        'document-processor', 'guidance-web-access', 'pharma-report-analyzer',
-        'ocr', 'weather', 'github', 'coding-agent'
-    ]
-    
-    # Check first 5 messages
-    check_msgs = messages[:5] if len(messages) >= 5 else messages
-    
-    combined_text = ' '.join([msg[2].lower() for msg in check_msgs])
-    
-    # Check if it's a skill optimization session
-    is_optimization = False
-    for kw in skill_opt_keywords:
-        if kw.lower() in combined_text:
-            is_optimization = True
-            break
-    
-    if not is_optimization:
+    opt_kws = ['优化', 'skill优化', 'auto-optimize', 'skill-creator', '改进', '改善', '提升']
+    known = ['session-save', 'auto-optimize-skills', 'feishu-bitable', 'feishu-calendar',
+             'feishu-im-read', 'document-processor', 'guidance-web-access',
+             'pharma-report-analyzer', 'ocr', 'weather', 'github', 'coding-agent']
+    check = ' '.join([m[2].lower() for m in messages[:5]])
+    if not any(k.lower() in check for k in opt_kws):
         return ('general', None)
-    
-    # Try to identify which skill is being optimized
-    target_skill = None
-    for skill in known_skills:
-        skill_lower = skill.lower()
-        # Look for patterns like "优化 session-save" or "session-save skill"
-        if skill_lower in combined_text:
-            # Normalize skill name (replace _ to -)
-            target_skill = skill.replace('_', '-')
-            break
-    
-    return ('skill_optimization', target_skill)
+    for s in known:
+        if s.lower() in check:
+            return ('skill_optimization', s.replace('_', '-'))
+    return ('skill_optimization', '其他')
+
+def generate_auto_prefix(messages):
+    """Extract short prefix from message content. Priority:
+    1. First 5 user messages
+    2. All messages if still nothing
+    Returns a slug up to 20 chars.
+    """
+    def extract(texts):
+        combined = ' '.join(texts)
+        out = []
+        out += re.findall(r'[\u4e00-\u9fff]{2,12}(?:注射液|片|胶囊|颗粒|丸|口服液|栓剂|膏)', combined)
+        out += re.findall(r'[A-Z][-_]?\d{2,6}[-_]?\w*', combined)
+        out += re.findall(r'[\u4e00-\u9fff]{3,10}(?:合规性|非临床|研究|报告|分析|评估|优化|方案|审查)', combined)
+        out += re.findall(r'[\u4e00-\u9fff]{3,6}', combined)
+        seen, cleaned = set(), []
+        for c in out:
+            c = re.sub(r'[`*\[\]()（）]', '', c.strip())
+            if len(c) >= 2 and c not in seen:
+                seen.add(c); cleaned.append(c)
+        return cleaned
+
+    user_msgs = [m[2] for m in messages if m[0] == 'user']
+    cand = extract(user_msgs[:5])
+    if not cand:
+        cand = extract([m[2] for m in messages])
+    if cand:
+        prefix = ''.join(cand[:3])[:20]
+        return prefix if prefix else '会话'
+    return '会话'
 
 def get_time_filename(msg):
-    """Extract time for filename: YYYY-MM-DD-HHMM"""
-    # Format: "Thu 2026-03-26 13:36 GMT+8"
     parts = msg[1].split(' ')
     if len(parts) >= 3:
-        # date_part = "2026-03-26", time_part = "13:36"
-        date_part = parts[1]
-        time_part = parts[2][:5]  # "13:36"
-        return f"{date_part}-{time_part}"
-    return "unknown"
+        return f"{parts[1]}-{parts[2][:5]}"
+    return 'unknown'
 
-def save_session(session_key, output_dir=None):
-    """Main function to save session"""
-    # Find session file
-    session_file = find_session_file(session_key)
-    if not session_file:
-        print(f"Session file not found for key: {session_key}")
-        return False
-    
-    # Extract messages
-    messages = extract_messages(session_file, session_key)
-    if not messages:
-        print("No messages found in session")
-        return False
-    
-    # Detect session type and target skill
-    session_type, target_skill = detect_session_type_and_target(messages)
-    
-    # Get session info
-    first_msg = messages[0]
-    last_msg = messages[-1]
-    start_time = get_time_filename(first_msg)
-    end_time = get_time_filename(last_msg)
-    date_range = f"{first_msg[1].split(' ')[1]} - {last_msg[1].split(' ')[1]}"
-    
-    # Determine output directory and filename based on session type
-    if output_dir is None:
-        if session_type == 'skill_optimization' and target_skill:
-            # Save to target skill's folder
-            workspace_skills = Path.home() / '.openclaw' / 'workspace' / 'skills'
-            skill_dir = workspace_skills / target_skill
-            if not skill_dir.exists():
-                # Fallback to session-save folder if target skill not found
-                skill_dir = Path(__file__).parent.parent
-            subdir = skill_dir / '优化过程对话记录'
-            subdir.mkdir(parents=True, exist_ok=True)
-            output_dir = subdir
-            base_name = f"优化过程对话记录-{start_time}-{end_time}"
-        else:
-            # Save to desktop
-            output_dir = Path.home() / 'Desktop'
-            base_name = f"session-{start_time}-{end_time}"
-    else:
-        output_dir = Path(output_dir)
-        base_name = f"session-{start_time}-{end_time}"
-    
-    output_dir.mkdir(parents=True, exist_ok=True)
-    
-    # Generate HTML
-    session_type_display = 'Skill优化会话' if session_type == 'skill_optimization' else '常规会话'
+def resolve_output_path(base_name, output_dir):
+    """Ensure unique path (add -1, -2 … if file already exists)."""
+    out_dir = Path(output_dir) if output_dir else Path.home() / 'Desktop'
+    out_dir.mkdir(parents=True, exist_ok=True)
+    html_path = out_dir / f"{base_name}.html"
+    md_path = out_dir / f"{base_name}.md"
+    n = 1
+    while html_path.exists() or md_path.exists():
+        html_path = out_dir / f"{base_name}-{n}.html"
+        md_path = out_dir / f"{base_name}-{n}.md"
+        n += 1
+    return html_path, md_path, out_dir
+
+def build_html(title, date_range, session_id, start_time, workspace, session_type, messages):
     html = HTML_HEADER.format(
-        title='会话记录',
-        date_range=date_range,
-        session_id=session_key,
-        session_type=session_type_display,
-        start_time=start_time,
-        workspace='/home/wangyc/.openclaw/workspace'
-    )
-    
-    for role, time_str, text in messages:
-        role_class = 'role-user' if role == 'user' else 'role-assistant'
-        role_text = '用户' if role == 'user' else 'Cortana 💙'
-        html_content = convert_text_to_html(text)
-        html += f'\n  <div class="message {role}">\n    <div class="msg-header"><span class="msg-role {role_class}">{role_text}</span><span class="msg-time">{time_str}</span></div>\n    <div class="msg-content">{html_content}</div>\n  </div>'
-    
-    html += HTML_FOOTER.format(
-        session_id=session_key,
-        end_time=end_time
-    )
-    
-    # Generate Markdown
-    md_header = f'''# 会话记录
+        title=title, date_range=date_range, session_id=session_id,
+        start_time=start_time, workspace=workspace, session_type=session_type)
+    for role, tstr, text in messages:
+        rc = 'role-user' if role == 'user' else 'role-assistant'
+        rt = '用户' if role == 'user' else '助手'
+        html += f'\n  <div class="message {role}">\n    <div class="msg-header"><span class="msg-role {rc}">{rt}</span><span class="msg-time">{tstr}</span></div>\n    <div class="msg-content">{convert_text_to_html(text)}</div>\n  </div>'
+    html += f'\n  <div class="footer"><span class="highlight">会话结束</span> <span>Session ID: {session_id}</span> <span>结束时间: {start_time}</span></div>\n  </div></body></html>'
+    return html
 
-**Session ID:** `{session_key}`  
-**工作目录:** `/home/wangyc/.openclaw/workspace`  
+def build_md(title, session_id, workspace, date_range, messages):
+    md = f'''# {title}
+
+**Session ID:** `{session_id}`  
+**工作目录:** `{workspace}`  
 **日期:** {date_range}
 
 ---
 
 '''
-    
-    md = md_header
-    for role, time_str, text in messages:
-        role_text = '**用户**' if role == 'user' else '**Cortana 💙**'
-        md += f'\n## {role_text} - {time_str}\n\n{text}\n\n---\n'
-    
-    md += f'\n---\n\n<span style="background-color: yellow; color: black;">**会话结束**</span> | **Session ID:** {session_key} | **结束时间:** {end_time}\n'
-    
-    # Save files
-    html_path = output_dir / f"{base_name}.html"
-    md_path = output_dir / f"{base_name}.md"
-    
+    for role, tstr, text in messages:
+        rt = '**用户**' if role == 'user' else '**助手**'
+        md += f'\n## {rt} - {tstr}\n\n{text}\n\n---\n'
+    md += f'\n---\n\n<span style="background-color: yellow; color: black;">**会话结束**</span> | **Session ID:** {session_id}\n'
+    return md
+
+# ─────────────────────────────────────────────
+# Main
+# ─────────────────────────────────────────────
+
+def save_session(session_key, output_dir=None, custom_prefix=None):
+    session_file = find_session_file(session_key)
+    if not session_file:
+        print(f"Session file not found for key: {session_key}")
+        return False
+
+    messages = extract_messages(session_file, session_key)
+    if not messages:
+        print("No messages found in session")
+        return False
+
+    session_type, target_skill = detect_session_type_and_target(messages)
+    st = get_time_filename(messages[0])
+    et = get_time_filename(messages[-1])
+    date_range = f"{messages[0][1].split(' ')[1]} - {messages[-1][1].split(' ')[1]}"
+    type_display = 'Skill优化会话' if session_type == 'skill_optimization' else '常规会话'
+
+    # ── Filename and path ──────────────────────
+    if output_dir is None:
+        if session_type == 'skill_optimization' and target_skill:
+            skill_dir = Path.home() / '.openclaw' / 'workspace' / 'skills' / target_skill
+            if not skill_dir.exists():
+                skill_dir = Path(__file__).parent.parent
+            out_dir = skill_dir / '优化过程对话记录'
+            out_dir.mkdir(parents=True, exist_ok=True)
+            base_name = f"优化过程对话记录-{st}-{et}"
+        else:
+            out_dir = Path.home() / 'Desktop'
+            prefix = custom_prefix if custom_prefix else generate_auto_prefix(messages)
+            base_name = f"{prefix}-session-{st}-{et}"
+    else:
+        out_dir = Path(output_dir)
+        prefix = custom_prefix if custom_prefix else generate_auto_prefix(messages)
+        base_name = f"{prefix}-session-{st}-{et}"
+
+    html_path, md_path, _ = resolve_output_path(base_name, out_dir)
+
+    # ── Build content ─────────────────────────
+    title = base_name
+    html = build_html(title, date_range, session_key, et, '/home/wangyc/.openclaw/workspace', type_display, messages)
+    md = build_md(title, session_key, '/home/wangyc/.openclaw/workspace', date_range, messages)
+
+    # ── Save both files ───────────────────────
     with open(html_path, 'w', encoding='utf-8') as f:
         f.write(html)
-    
     with open(md_path, 'w', encoding='utf-8') as f:
         f.write(md)
-    
+
+    # ── Report ───────────────────────────────
     print(f"Saved {len(messages)} messages")
-    if session_type == 'skill_optimization' and target_skill:
-        print(f"Type: Skill优化会话 - 目标: {target_skill}")
+    if session_type == 'skill_optimization':
+        print(f"Type: Skill优化会话 | 目标: {target_skill}")
     else:
-        print(f"Type: 常规会话")
-    print(f"HTML: {html_path} ({len(html)} bytes)")
-    print(f"MD: {md_path} ({len(md)} bytes)")
+        prefix_used = custom_prefix if custom_prefix else generate_auto_prefix(messages)
+        print(f"Type: 常规会话 | Prefix: {prefix_used}")
+    print(f"HTML: {html_path} ({len(html):,} bytes)")
+    print(f"MD:   {md_path} ({len(md):,} bytes)")
     return True
 
 if __name__ == '__main__':
     if len(sys.argv) < 2:
-        print("Usage: python save_session.py <session_key> [output_dir]")
+        print("Usage: python save_session.py <session_key> [output_dir] [prefix]")
+        print("  session_key : Session key, UUID, or 'current'")
+        print("  output_dir  : Optional. Defaults to Desktop (general) or skill folder (optimization)")
+        print("  prefix      : Optional. Short prefix for regular sessions (e.g. '参芪扶正_S152')")
+        print("               If omitted, auto-extracted from message content.")
+        print()
+        print("Examples:")
+        print("  python save_session.py agent:main:main")
+        print("  python save_session.py 6cc94624-fcc1-4d52-b99d-9f61a0e88af0")
+        print("  python save_session.py current ~/Desktop '参芪扶正_S152合规'")
         sys.exit(1)
-    
+
     session_key = sys.argv[1]
     output_dir = sys.argv[2] if len(sys.argv) > 2 else None
-    
-    success = save_session(session_key, output_dir)
+    custom_prefix = sys.argv[3] if len(sys.argv) > 3 else None
+
+    success = save_session(session_key, output_dir, custom_prefix)
     sys.exit(0 if success else 1)

@@ -1,6 +1,6 @@
 ---
 name: session-save
-version: "1.2.0"
+version: "1.2.1"
 description: |
   保存完整会话记录（保留表格、代码块、ASCII图等格式）。触发词包括：
   "导出"、"导出会话"、"保存会话"、"保存对话"、"导出聊天记录"、"会话记录"、"完整记录"、"会话导出"、"对话导出"、"记录会话"、"把会话保存"、"把对话保存"等。
@@ -11,7 +11,9 @@ description: |
   - Skill优化类 → `~/.openclaw/workspace/skills/{被优化skill}/优化过程对话记录/`
   - 常规会话 → `~/Desktop/`
 
-  文件名格式：`session-开始时间-结束时间.html` + `session-开始时间-结束时间.md`
+  文件名格式：
+  - Skill优化类：`优化过程对话记录-YEAR-MM-DD-HHMM-YEAR-MM-DD-HHMM.html/md`
+  - 常规会话：`{前缀}-session-YEAR-MM-DD-HHMM-YEAR-MM-DD-HHMM.html/md`
 ---
 
 # Session Save Skill
@@ -33,6 +35,14 @@ description: |
 - 开始时间：`YYYY-MM-DD-HHMM`
 - 结束时间：`YYYY-MM-DD-HHMM`
 
+## 文件名规则
+
+- **Skill优化类**：`优化过程对话记录-{开始时间}-{结束时间}`
+  - 例：`优化过程对话记录-2026-04-29-1200-2026-04-29-1400.html`
+- **常规会话**：`{前缀}-session-{开始时间}-{结束时间}`
+  - 例：`参芪扶正_S152合规-session-2026-04-29-1200-2026-04-29-1400.html`
+  - 前缀可由 Agent 汇总确定，或自动从消息内容提取
+
 ---
 
 ## 工作流程
@@ -42,11 +52,38 @@ description: |
 
 2. **找到会话文件**
    - 从 `sessions.json` 查找 session key → JSONL 映射
+   - **扫描全部** `~/.openclaw/agents/*/sessions/` 目录（支持 workspace agent）
    - 直接读取 JSONL（不用 `sessions_history` API）
 
 3. **生成文件**
    - `.html` - 带样式（表格、代码块正确渲染）
    - `.md` - 原始 Markdown 格式
+   - **同时生成两种格式**
+
+---
+
+## 使用方式
+
+```bash
+python3 ~/.openclaw/skills/session-save/scripts/save_session.py <session_key> [output_dir] [prefix]
+```
+
+参数说明：
+- `session_key`：会话 key，支持 `agent:xxx:main` 格式或 UUID
+- `output_dir`：可选，输出目录（默认自动）
+- `prefix`：可选，常规会话的文件名前缀（默认自动从消息内容提取）
+
+示例：
+```bash
+# 自动检测类型和前缀
+python3 save_session.py agent:main:main
+
+# 指定输出目录
+python3 save_session.py agent:main:main ~/Desktop
+
+# 自定义前缀（由 Agent 汇总确定）
+python3 save_session.py agent:main:main ~/Desktop '参芪扶正_S152合规分析'
+```
 
 ---
 
@@ -54,41 +91,28 @@ description: |
 
 - **`sessions_history` API 会丢失格式**，必须读 JSONL
 - **JSONL 每行一个完整 JSON 对象**，含原始文本（含表格、ASCII 图）
-- **用户标签（`<final>`）和 sender metadata 应移除**
-
----
-
-## 使用方式
-
-```bash
-python3 ~/.openclaw/workspace/skills/session-save/scripts/save_session.py <session_key>
-```
-
----
-
-## 已知 Skill 列表
-
-session-save, auto-optimize-skills, feishu-bitable, feishu-calendar, feishu-im-read, document-processor, guidance-web-access, pharma-report-analyzer, ocr, weather, github, coding-agent 等。
+- **用户标签和 sender metadata 应移除**
 
 ---
 
 ## 版本历史
 
+### 1.2.1
+- 重构脚本，修复文件名逻辑：确保同时生成 `.html` + `.md`
+- 新增：`[prefix]` 可选参数，自定义常规会话的文件名前缀
+- 新增：`generate_auto_prefix()` 自动从消息内容提取项目关键词生成前缀
+- 重构：全面重写代码，结构更清晰，增加防重复覆盖逻辑
+- 修复：扫描全部 agent 目录（~/.openclaw/agents/*/sessions/）
+
 ### 1.2.0
-- 修复：find_session_file() 现已扫描全部 agent 目录（~/.openclaw/agents/*/sessions/），支持 workspace agent
-- 已知修复：之前只查 ~/.openclaw/agents/main/sessions/，workspace agent 无法导出
+- 修复：find_session_file() 现已扫描全部 agent 目录，支持 workspace agent
 
 ### 1.1.0
-- 触发词扩展："导出"、"导出会话"、"保存会话"、"保存对话"、"导出聊天记录"、"会话记录"、"完整记录"、"会话导出"、"对话导出"、"记录会话"、"把会话保存"、"把对话保存"等
-- description中明确默认保存路径（桌面或skill文件夹）
-- 文件名格式统一为 `session-开始时间-结束时间.html/md`
+- 触发词扩展
+- description中明确默认保存路径
 
 ### 1.0.0
 - 初始版本
-- 支持自动判断会话类型（Skill优化/常规）
-- 支持识别目标 Skill 并保存到对应文件夹
-- 生成 HTML + Markdown 两种格式
-- 保留原始表格、ASCII 图等格式
 
 ---
 
