@@ -194,68 +194,81 @@ HTML_FOOTER = '''
 '''
 
 def find_session_file(session_key):
-    """Find the JSONL file for a given session key"""
-    sessions_dir = Path.home() / '.openclaw' / 'agents' / 'main' / 'sessions'
-    if not sessions_dir.exists():
+    """Find the JSONL file for a given session key across ALL agent directories.
+    
+    Searches ~/.openclaw/agents/*/sessions/ for the session, including:
+    - ~/.openclaw/agents/main/sessions/
+    - ~/.openclaw/agents/{workspace-agent}/sessions/
+    - ~/.openclaw/agents/*/sessions/
+    """
+    agents_base = Path.home() / '.openclaw' / 'agents'
+    if not agents_base.exists():
         return None
     
-    # Normalize session key - ensure it has prefix if needed
-    normalized_key = session_key
-    if not session_key.startswith('agent:'):
-        # Try common prefixes
-        for prefix in ['agent:main:', 'agent:', '']:
-            test_key = prefix + session_key if prefix and not session_key.startswith(prefix) else session_key
-            if test_key in data if 'data' in dir() else False:
-                break
+    # Get all agent session directories
+    agent_dirs = [d for d in agents_base.iterdir() if d.is_dir() and (d / 'sessions').is_dir()]
     
-    # Check sessions.json for mapping
-    sessions_json = sessions_dir / 'sessions.json'
-    if sessions_json.exists():
-        try:
-            with open(sessions_json, 'r') as f:
-                data = json.load(f)
+    # Extract search key parts
+    key_part = session_key.split(':')[-1][:8] if ':' in session_key else session_key[:8]
+    
+    for agent_dir in agent_dirs:
+        sessions_dir = agent_dir / 'sessions'
+        sessions_json = sessions_dir / 'sessions.json'
+        
+        # Strategy 1: Check sessions.json for key mapping
+        if sessions_json.exists():
+            try:
+                with open(sessions_json, 'r') as f:
+                    data = json.load(f)
                 
-                # Try direct key match with various prefixes
-                for key_to_try in [
-                    session_key,
-                    'agent:main:' + session_key if not session_key.startswith('agent:') else session_key,
-                    session_key.replace('agent:main:', '') if 'agent:main:' in session_key else session_key,
-                ]:
+                # Normalize prefixes to try
+                prefixes_to_try = [session_key]
+                if not session_key.startswith('agent:'):
+                    prefixes_to_try.append('agent:' + session_key)
+                if session_key.startswith('agent:'):
+                    parts = session_key.split(':')
+                    if len(parts) >= 3:
+                        prefixes_to_try.append(':'.join(parts[2:]))  # bare key
+                
+                for key_to_try in prefixes_to_try:
                     if key_to_try in data:
-                        session_file_path = data[key_to_try].get('sessionFile')
-                        if session_file_path:
-                            return Path(session_file_path)
+                        fp = data[key_to_try].get('sessionFile')
+                        if fp:
+                            p = Path(fp)
+                            if p.exists():
+                                return p
                 
-                # Search in all entries for sessionId match
+                # Search by sessionId match
                 for k, v in data.items():
                     if isinstance(v, dict):
-                        session_id = v.get('sessionId', '')
-                        if session_key in session_id or session_id in session_key:
-                            session_file_path = v.get('sessionFile')
-                            if session_file_path:
-                                return Path(session_file_path)
-        except Exception as e:
-            print(f"Error reading sessions.json: {e}", file=sys.stderr)
-    
-    # Try direct match in filename (partial match for UUIDs)
-    key_part = session_key.split(':')[-1][:8] if ':' in session_key else session_key[:8]
-    for f in sessions_dir.glob('*.jsonl'):
-        if key_part in f.name:
-            return f
-    
-    # Try to find by session_key in file content (search first few lines)
-    for f in sessions_dir.glob('*.jsonl'):
-        if f.name.endswith('.deleted') or f.name.endswith('.reset'):
-            continue
-        try:
-            with open(f, 'r', encoding='utf-8') as file:
-                for i, line in enumerate(file):
-                    if i > 5:  # Check first 5 lines
-                        break
-                    if session_key in line:
-                        return f
-        except:
-            continue
+                        sid = v.get('sessionId', '')
+                        if key_part in sid or sid in session_key:
+                            fp = v.get('sessionFile')
+                            if fp:
+                                p = Path(fp)
+                                if p.exists():
+                                    return p
+            except Exception as e:
+                print(f"Error reading {sessions_json}: {e}", file=sys.stderr)
+        
+        # Strategy 2: Direct filename match (UUID partial match)
+        for f in sessions_dir.glob('*.jsonl'):
+            if key_part in f.name and not any(x in f.name for x in ['.deleted','.reset','.checkpoint']):
+                return f
+        
+        # Strategy 3: Content search (first 5 lines of each file)
+        for f in sessions_dir.glob('*.jsonl'):
+            if any(x in f.name for x in ['.deleted','.reset','.checkpoint']):
+                continue
+            try:
+                with open(f, 'r', encoding='utf-8') as file:
+                    for i, line in enumerate(file):
+                        if i > 5:
+                            break
+                        if session_key in line:
+                            return f
+            except:
+                continue
     
     return None
 
