@@ -1,6 +1,6 @@
 ---
 name: session-save
-version: "1.2.1"
+version: "1.2.2"
 description: |
   保存完整会话记录（保留表格、代码块、ASCII图等格式）。触发词包括：
   "导出"、"导出会话"、"保存会话"、"保存对话"、"导出聊天记录"、"会话记录"、"完整记录"、"会话导出"、"对话导出"、"记录会话"、"把会话保存"、"把对话保存"等。
@@ -9,7 +9,7 @@ description: |
 
   默认保存路径：
   - Skill优化类 → `~/.openclaw/workspace/skills/{被优化skill}/优化过程对话记录/`
-  - 常规会话 → `~/Desktop/`
+  - 常规会话 → `~/Documents/工作/1 AI实际应用导出/`
 
   文件名格式：
   - Skill优化类：`优化过程对话记录-YEAR-MM-DD-HHMM-YEAR-MM-DD-HHMM.html/md`
@@ -79,10 +79,10 @@ python3 ~/.openclaw/skills/session-save/scripts/save_session.py <session_key> [o
 python3 save_session.py agent:main:main
 
 # 指定输出目录
-python3 save_session.py agent:main:main ~/Desktop
+python3 save_session.py agent:main:main ~/Documents/工作/1 AI实际应用导出
 
 # 自定义前缀（由 Agent 汇总确定）
-python3 save_session.py agent:main:main ~/Desktop '参芪扶正_S152合规分析'
+python3 save_session.py agent:main:main ~/Documents/工作/1 AI实际应用导出 '参芪扶正_S152合规分析'
 ```
 
 ---
@@ -97,7 +97,8 @@ python3 save_session.py agent:main:main ~/Desktop '参芪扶正_S152合规分析
 
 ## 版本历史
 
-### 1.2.1
+### 1.2.2
+- 修复：常规会话默认路径从 ~/Desktop 改为 ~/Documents/工作/1 AI实际应用导出/
 - 重构脚本，修复文件名逻辑：确保同时生成 `.html` + `.md`
 - 新增：`[prefix]` 可选参数，自定义常规会话的文件名前缀
 - 新增：`generate_auto_prefix()` 自动从消息内容提取项目关键词生成前缀

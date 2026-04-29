@@ -299,7 +299,7 @@ def get_time_filename(msg):
 
 def resolve_output_path(base_name, output_dir):
     """Ensure unique path (add -1, -2 … if file already exists)."""
-    out_dir = Path(output_dir) if output_dir else Path.home() / 'Desktop'
+    out_dir = Path(output_dir) if output_dir else Path.home() / 'Documents' / '工作' / '1 AI实际应用导出'
     out_dir.mkdir(parents=True, exist_ok=True)
     html_path = out_dir / f"{base_name}.html"
     md_path = out_dir / f"{base_name}.md"
@@ -368,7 +368,7 @@ def save_session(session_key, output_dir=None, custom_prefix=None):
             out_dir.mkdir(parents=True, exist_ok=True)
             base_name = f"优化过程对话记录-{st}-{et}"
         else:
-            out_dir = Path.home() / 'Desktop'
+            out_dir = Path.home() / 'Documents' / '工作' / '1 AI实际应用导出'
             prefix = custom_prefix if custom_prefix else generate_auto_prefix(messages)
             base_name = f"{prefix}-session-{st}-{et}"
     else:
@@ -411,7 +411,7 @@ if __name__ == '__main__':
         print("Examples:")
         print("  python save_session.py agent:main:main")
         print("  python save_session.py 6cc94624-fcc1-4d52-b99d-9f61a0e88af0")
-        print("  python save_session.py current ~/Desktop '参芪扶正_S152合规'")
+        print("  python save_session.py current ~/Documents/工作/1 AI实际应用导出 '参芪扶正_S152合规'")
         sys.exit(1)
 
     session_key = sys.argv[1]
